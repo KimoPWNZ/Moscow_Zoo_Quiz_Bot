@@ -22,14 +22,12 @@ user_answers = {}
 
 @dp.message(Command("start"))
 async def start_quiz(message: Message):
-    """Обработчик команды /start. Начинает викторину."""
     user_answers[message.chat.id] = []
     await message.answer("Привет! Добро пожаловать в викторину Московского зоопарка. Давайте начнём!")
     await send_question(message.chat.id, 0)
 
 
 async def send_question(chat_id, question_index):
-    """Отправляет вопрос пользователю."""
     if question_index < len(quiz_data["questions"]):
         question = quiz_data["questions"][question_index]
         answers_markup = ReplyKeyboardMarkup(
