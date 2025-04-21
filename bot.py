@@ -78,6 +78,7 @@ async def help_info(message: Message):
     await message.answer("Программа опеки Московского зоопарка позволяет вам помочь животным, взяв их под опеку. Узнайте больше на официальном сайте Зоопарка!")
 
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
