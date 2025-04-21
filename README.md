@@ -13,12 +13,12 @@
 ## Установка
 1. Клонируйте репозиторий:
    ```bash
-   git clone https://github.com/<ваш-username>/moscow-zoo-quiz-bot.git
-   cd moscow-zoo-quiz-bot
+   git clone https://github.com/KimoPWNZ/Moscow_Zoo_Quiz_Bot.git
+   cd Moscow_Zoo_Quiz_Bot
    ```
 2. Установите зависимости:
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 3. Создайте файл `.env` и добавьте токен Telegram-бота:
    ```
@@ -26,7 +26,7 @@
    ```
 4. Запустите бота:
    ```bash
-   python bot.py
+   python3 bot.py
    ```
 
 ## Пример использования
