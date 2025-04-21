@@ -25,7 +25,6 @@ async def start_quiz(message: Message):
     await message.answer("Привет! Добро пожаловать в викторину Московского зоопарка. Давайте начнём!")
     await send_question(message.chat.id, 0)
 
-
 async def send_question(chat_id, question_index):
     if question_index < len(quiz_data["questions"]):
         question = quiz_data["questions"][question_index]
