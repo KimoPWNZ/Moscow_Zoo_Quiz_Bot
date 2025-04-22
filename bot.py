@@ -2,8 +2,10 @@ import asyncio
 import json
 import os
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.filters import Command
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,10 +21,87 @@ with open("quiz_data.json", "r", encoding="utf-8") as f:
 
 user_answers = {}
 
+def get_social_media_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="Instagram", url="https://instagram.com/moscowzoo"),
+        InlineKeyboardButton(text="ВКонтакте", url="https://vk.com/moscowzoo")
+    )
+    builder.row(
+        InlineKeyboardButton(text="Facebook", url="https://facebook.com/moscowzoo"),
+        InlineKeyboardButton(text="YouTube", url="https://youtube.com/moscowzoo")
+    )
+    return builder.as_markup()
+
+
+def get_share_keyboard(result_animal: str):
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="Поделиться результатом",
+            url=f"https://t.me/share/url?url=Моё тотемное животное Московского зоопарка — {result_animal}!&text=Пройди викторину и узнай своё тотемное животное!"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="Наши соцсети",
+            callback_data="social_media"
+        )
+    )
+    return builder.as_markup()
+
+
+def get_restart_inline_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="Перезапустить викторину",
+            callback_data="restart_quiz"
+        )
+    )
+    return builder.as_markup()
+
+
+def get_contact_keyboard():
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="Оставить отзыв")],
+            [KeyboardButton(text="Связаться с поддержкой")],
+            [KeyboardButton(text="Наши соцсети")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    return keyboard
+
+
+@dp.callback_query(lambda c: c.data == "restart_quiz")
+async def process_restart(callback_query: CallbackQuery):
+    await callback_query.answer()
+    await start_quiz(callback_query.message)
+
+
+@dp.callback_query(lambda c: c.data == "social_media")
+async def process_social_media(callback_query: CallbackQuery):
+    await callback_query.answer()
+    await show_social_media(callback_query.message)
+
+
+@dp.message(Command("social"))
+async def show_social_media(message: Message):
+    await message.answer(
+        "Подпишитесь на наши социальные сети:",
+        reply_markup=get_social_media_keyboard()
+    )
+
+
 @dp.message(Command("start"))
 async def start_quiz(message: Message):
     user_answers[message.chat.id] = []
-    await message.answer("Привет! Добро пожаловать в викторину Московского зоопарка. Давайте начнём!")
+    await message.answer(
+        "Привет! Добро пожаловать в викторину Московского зоопарка. Давайте начнём!",
+        reply_markup=ReplyKeyboardRemove()
+    )
     await send_question(message.chat.id, 0)
 
 async def send_question(chat_id, question_index):
@@ -40,10 +119,31 @@ async def send_question(chat_id, question_index):
 @dp.message()
 async def handle_answer(message: Message):
     chat_id = message.chat.id
+    if message.text in ["Оставить отзыв", "Связаться с поддержкой", "Наши соцсети"]:
+        if message.text == "Наши соцсети":
+            await show_social_media(message)
+        else:
+            await handle_contact_request(message)
+        return
+
     if chat_id in user_answers:
         user_answers[chat_id].append(message.text)
         question_index = len(user_answers[chat_id])
         await send_question(chat_id, question_index)
+
+
+async def handle_contact_request(message: Message):
+    if message.text == "Оставить отзыв":
+        await message.answer(
+            "Пожалуйста, напишите ваш отзыв о викторине. Мы ценим ваше мнение!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    elif message.text == "Связаться с поддержкой":
+        await message.answer(
+            "По всем вопросам вы можете написать на почту support@moscowzoo.ru или позвонить по телефону +7 (XXX) XXX-XX-XX",
+            reply_markup=ReplyKeyboardRemove()
+        )
+
 
 async def calculate_result(chat_id):
     answers = user_answers.get(chat_id, [])
@@ -58,18 +158,51 @@ async def calculate_result(chat_id):
 
     if result_animal:
         image_path = f"images/{result_animal}.jpg"
-        if os.path.exists(image_path):
-            with open(image_path, "rb") as photo:
-                await bot.send_photo(chat_id, photo, caption=f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}")
-        else:
-            await bot.send_message(chat_id, f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}")
-        await bot.send_message(chat_id, "Хотите узнать больше о программе опеки? Нажмите /help")
-    else:
-        await bot.send_message(chat_id, "Не удалось определить животное. Попробуйте ещё раз! /start")
+        try:
+            if os.path.exists(image_path):
+                with open(image_path, "rb") as photo:
+                    await bot.send_photo(
+                        chat_id,
+                        photo,
+                        caption=f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
+                        reply_markup=get_share_keyboard(result_animal)
+                    )
+            else:
+                await bot.send_message(
+                    chat_id,
+                    f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
+                    reply_markup=get_share_keyboard(result_animal)
+                )
+        except Exception as e:
+            print(f"Ошибка при отправке изображения: {e}")
+            await bot.send_message(
+                chat_id,
+                f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
+                reply_markup=get_share_keyboard(result_animal)
+            )
 
+        await bot.send_message(
+            chat_id,
+            "Если хотите оставить отзыв напишите в чат: Оставить отзыв\n"
+            "Для связи с поддержкой напишите в чат: Связаться с поддержкой",
+            reply_markup=get_restart_inline_keyboard()
+        )
+    else:
+        await bot.send_message(
+            chat_id,
+            "Не удалось определить животное. Попробуйте ещё раз!",
+            reply_markup=get_restart_inline_keyboard()
+        )
 @dp.message(Command("help"))
 async def help_info(message: Message):
-    await message.answer("Программа опеки Московского зоопарка позволяет вам помочь животным, взяв их под опеку. Узнайте больше на официальном сайте Зоопарка!")
+    await message.answer(
+        "Программа опеки Московского зоопарка позволяет вам помочь животным, взяв их под опеку. "
+        "Узнайте больше на официальном сайте Зоопарка!\n\n"
+        "Сайт: https://www.moscowzoo.ru\n"
+        "Программа опеки: https://www.moscowzoo.ru/my-zoo/become-a-guardian/\n\n"
+        "Наши социальные сети: /social",
+        reply_markup=get_restart_inline_keyboard()
+    )
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
