@@ -19,13 +19,11 @@ with open("quiz_data.json", "r", encoding="utf-8") as f:
 
 user_answers = {}
 
-
 @dp.message(Command("start"))
 async def start_quiz(message: Message):
     user_answers[message.chat.id] = []
     await message.answer("Привет! Добро пожаловать в викторину Московского зоопарка. Давайте начнём!")
     await send_question(message.chat.id, 0)
-
 
 async def send_question(chat_id, question_index):
     if question_index < len(quiz_data["questions"]):
@@ -38,7 +36,6 @@ async def send_question(chat_id, question_index):
         await bot.send_message(chat_id, question["text"], reply_markup=answers_markup)
     else:
         await calculate_result(chat_id)
-
 
 @dp.message()
 async def handle_answer(message: Message):
@@ -69,7 +66,6 @@ async def calculate_result(chat_id):
         await bot.send_message(chat_id, "Хотите узнать больше о программе опеки? Нажмите /help")
     else:
         await bot.send_message(chat_id, "Не удалось определить животное. Попробуйте ещё раз! /start")
-
 
 @dp.message(Command("help"))
 async def help_info(message: Message):
