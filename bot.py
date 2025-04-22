@@ -2,11 +2,12 @@ import asyncio
 import json
 import os
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -33,13 +34,15 @@ def get_social_media_keyboard():
     )
     return builder.as_markup()
 
-
 def get_share_keyboard(result_animal: str):
+    share_text = f"Моё тотемное животное Московского зоопарка — {result_animal}!\nПройди викторину и узнай своё тотемное животное!"
+    encoded_text = quote(share_text)
+
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
             text="Поделиться результатом",
-            url=f"https://t.me/share/url?url=Моё тотемное животное Московского зоопарка — {result_animal}!&text=Пройди викторину и узнай своё тотемное животное!"
+            url=f"https://t.me/share/url?url={encoded_text}"
         )
     )
     builder.row(
@@ -50,7 +53,6 @@ def get_share_keyboard(result_animal: str):
     )
     return builder.as_markup()
 
-
 def get_restart_inline_keyboard():
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -60,7 +62,6 @@ def get_restart_inline_keyboard():
         )
     )
     return builder.as_markup()
-
 
 def get_contact_keyboard():
     keyboard = ReplyKeyboardMarkup(
@@ -74,18 +75,15 @@ def get_contact_keyboard():
     )
     return keyboard
 
-
 @dp.callback_query(lambda c: c.data == "restart_quiz")
 async def process_restart(callback_query: CallbackQuery):
     await callback_query.answer()
     await start_quiz(callback_query.message)
 
-
 @dp.callback_query(lambda c: c.data == "social_media")
 async def process_social_media(callback_query: CallbackQuery):
     await callback_query.answer()
     await show_social_media(callback_query.message)
-
 
 @dp.message(Command("social"))
 async def show_social_media(message: Message):
@@ -93,7 +91,6 @@ async def show_social_media(message: Message):
         "Подпишитесь на наши социальные сети:",
         reply_markup=get_social_media_keyboard()
     )
-
 
 @dp.message(Command("start"))
 async def start_quiz(message: Message):
@@ -131,7 +128,6 @@ async def handle_answer(message: Message):
         question_index = len(user_answers[chat_id])
         await send_question(chat_id, question_index)
 
-
 async def handle_contact_request(message: Message):
     if message.text == "Оставить отзыв":
         await message.answer(
@@ -143,7 +139,6 @@ async def handle_contact_request(message: Message):
             "По всем вопросам вы можете написать на почту support@moscowzoo.ru или позвонить по телефону +7 (XXX) XXX-XX-XX",
             reply_markup=ReplyKeyboardRemove()
         )
-
 
 async def calculate_result(chat_id):
     answers = user_answers.get(chat_id, [])
@@ -157,24 +152,34 @@ async def calculate_result(chat_id):
             result_animal = animal
 
     if result_animal:
-        image_path = f"images/{result_animal}.jpg"
-        try:
+        image_extensions = ['.jpg', '.jpeg', '.png']
+        image_sent = False
+
+        for ext in image_extensions:
+            image_path = f"images/{result_animal}{ext}"
             if os.path.exists(image_path):
-                with open(image_path, "rb") as photo:
+                try:
+                    with open(image_path, 'rb') as file:
+                        photo_data = file.read()
+
+                    photo = BufferedInputFile(
+                        file=photo_data,
+                        filename=f"{result_animal}{ext}"
+                    )
+
                     await bot.send_photo(
-                        chat_id,
-                        photo,
+                        chat_id=chat_id,
+                        photo=photo,
                         caption=f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
                         reply_markup=get_share_keyboard(result_animal)
                     )
-            else:
-                await bot.send_message(
-                    chat_id,
-                    f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
-                    reply_markup=get_share_keyboard(result_animal)
-                )
-        except Exception as e:
-            print(f"Ошибка при отправке изображения: {e}")
+                    image_sent = True
+                    break
+                except Exception as e:
+                    print(f"Ошибка при отправке изображения {image_path}: {str(e)}")
+
+        if not image_sent:
+            print(f"Изображение для {result_animal} не найдено или не может быть отправлено")
             await bot.send_message(
                 chat_id,
                 f"Ваше тотемное животное — {result_animal}!\n\n{quiz_data['animals'][result_animal]['description']}",
@@ -183,8 +188,9 @@ async def calculate_result(chat_id):
 
         await bot.send_message(
             chat_id,
-            "Если хотите оставить отзыв напишите в чат: Оставить отзыв\n"
-            "Для связи с поддержкой напишите в чат: Связаться с поддержкой",
+            "Если хотите оставить отзыв напишите в чат:\nОставить отзыв\n"
+            "\n"
+            "Для связи с поддержкой напишите в чат:\nСвязаться с поддержкой",
             reply_markup=get_restart_inline_keyboard()
         )
     else:
@@ -193,6 +199,7 @@ async def calculate_result(chat_id):
             "Не удалось определить животное. Попробуйте ещё раз!",
             reply_markup=get_restart_inline_keyboard()
         )
+
 @dp.message(Command("help"))
 async def help_info(message: Message):
     await message.answer(
